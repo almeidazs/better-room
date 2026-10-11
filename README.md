@@ -103,6 +103,8 @@ betterRoom({
 
 Each event has its own hook, typed to that event, and `onEvent` catches every event without one. Commands go over HTTP and live updates go over your own socket. `hooks` are the bridge between the two.
 
+`onEvent` here is this example's choice, not something the plugin does on its own: it receives only the events without a hook of their own, so `revoked` closes the socket and is not broadcast. To broadcast it as well, call the same code from `onRevoked`.
+
 Adding members with a role, revoking, rotating codes, locking, closing and reconciling capacity are administrative: they have no HTTP route, and your backend calls them through `auth.api` after deciding who may.
 
 ```ts

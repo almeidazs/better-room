@@ -340,6 +340,8 @@ betterRoom({
 })
 ```
 
+In the example above, `onEvent` broadcasts room events that have no configured event-specific hook. Since `onRevoked` handles `revoked`, that event closes the socket without being broadcast. This is a choice of the example, not a restriction of the plugin: to broadcast revocations too, call the same broadcast logic from `onRevoked`.
+
 Exactly one hook runs per event. When the event's own hook is given, only it runs and `onEvent` does not; otherwise `onEvent` runs; with neither, the event goes nowhere. A hook set to `undefined` counts as absent, so `onJoined: production ? notify : undefined` falls back to `onEvent`. Hooks are all optional, so `hooks: { onEvent }` alone hears everything. To run shared logic as well as a specific one, call it from the specific hook.
 
 | `type` | Hook | Fields | Raised when |
