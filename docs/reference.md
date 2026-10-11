@@ -357,6 +357,26 @@ Exactly one hook runs per event. When the event's own hook is given, only it run
 
 `membership` and `room` are the same reports the endpoints return. Every hook receives the whole event, `type` included, typed to the one it is named after: `onJoined` gets `RoomEventOf<'joined'>`, so `event.membership` needs no narrowing, while `onEvent` gets the `RoomEvent` union, which a `switch` on `event.type` narrows. `RoomHooks` types the `hooks` object, which helps when you build it apart from `betterRoom()`.
 
+A handler kept in its own module names its event with `RoomEventOf`, and a whole set of hooks with `RoomHooks`:
+
+```ts
+import type { RoomEventOf, RoomHooks } from 'better-room'
+
+const closeMember = (event: RoomEventOf<'revoked' | 'left'>) => {
+  sockets.close({ roomId: event.roomId, actorId: event.membership.actorId })
+}
+
+export const hooks = {
+  onRevoked: closeMember,
+  onLeft: closeMember,
+  onEvent: event => {
+    if ('roomId' in event) sockets.to(event.roomId).emit(event.type, event)
+  }
+} satisfies RoomHooks
+```
+
+`satisfies RoomHooks` checks the names and types each handler, while `hooks` keeps its exact shape for `betterRoom({ hooks })`.
+
 What the signal guarantees, and what it does not:
 
 - It fires once per change that was saved, after the write landed, never for a refusal and never for a call that changed nothing: a second join by a member, leaving twice and locking a locked room are all silent.
@@ -364,6 +384,30 @@ What the signal guarantees, and what it does not:
 - A hook that throws never undoes the change or fails the request. The error is logged through Better Auth's logger, and the event is not retried.
 - A deadline raises nothing when it passes. A membership or a room expires by the clock, not by a write, so schedule your own timer from `expiresAt` if your clients must hear about it at that moment. `expired` arrives later, when `reconcileRoomCapacity` takes the seat back, and only for a membership that neither left nor was revoked: a seat that reconciliation recollects after a revocation raises nothing new, because `revoked` already announced it.
 - A change made directly in the database, outside Better Auth, raises nothing.
+
+### Migrating from `onChange`
+
+`onChange` was replaced by `hooks` and no longer exists. A listener that handled every event moves to `onEvent` unchanged, since `onEvent` receives every event that has no hook of its own:
+
+```ts
+// before
+betterRoom({
+  onChange: event => {
+    if ('roomId' in event) sockets.to(event.roomId).emit(event.type, event)
+  }
+})
+
+// after
+betterRoom({
+  hooks: {
+    onEvent: event => {
+      if ('roomId' in event) sockets.to(event.roomId).emit(event.type, event)
+    }
+  }
+})
+```
+
+A branch on `event.type` can then move into the hook named after it, one at a time. Once an event has its own hook, `onEvent` no longer receives it, so take its branch out of `onEvent` in the same change. `RoomEventListener` is gone too: type the callback with `RoomEvent` or `RoomEventOf`, or the object with `RoomHooks`. Passing `onChange` still throws a `TypeError` at construction, so a missed upgrade fails at startup instead of silently dropping events.
 
 ### Planned
 
